@@ -351,3 +351,31 @@ snaive_month <- snaive(ts_month, h=20)
 plot(snaive_month)
 summary(snaive_month)
 
+# Train and Test sets
+
+train <- window(ts_month,start=c(2007,10),end=c(2009,10))
+
+arima_month.cv <- arima(train, order = c(0,0,0), 
+                     seasonal = list(order = c(1,1,0), period = 12))
+
+arima_month.pre.cv <- forecast(arima_month.cv, h=12)
+
+HW_fixed.cv <- HoltWinters(x = train, )
+
+HW_fixed.pred1.cv <- forecast(HW_fixed.cv,h= 12)
+
+snaive.fit <- snaive(train, h = 12)
+
+autoplot(window(ts_month, start=c(2007,1))) +
+  autolayer(snaive.fit, series="Seasonal naïve", PI=FALSE) +
+  autolayer(arima_month.pre.cv, series="Auto arima", PI=FALSE) +
+  autolayer(HW_fixed.pred1.cv, series="Holt Winters", PI=FALSE) +
+  xlab("Year") + ylab("kw") +
+  ggtitle("Forecasts of energy consumption") +
+  guides(colour=guide_legend(title="Forecast"))
+
+test <- window(ts_month, start=c(2009,10))
+accuracy(snaive.fit, test)
+accuracy(arima_month.pre.cv, test)
+accuracy(HW_fixed.pred1.cv, test)
+
