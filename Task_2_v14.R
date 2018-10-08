@@ -9,20 +9,16 @@ HHPC <- read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualiza
                                                                 Time = col_time(format = "%H:%M:%S"))
                    , trim_ws = TRUE)
 
-# Exploratory analysis
-summary(HHPC)
-
+##### Exploratory analysis #####
 
 # Missing values
 missing <- HHPC[is.na(HHPC$Global_active_power),]
-
-
 
 #####Time conversion####
 
 # Column date time
 
-HHPC$DateTime <- paste(HHPC$Date,HHPC$Time)
+HHPC$DateTime <- paste0(HHPC$Date,HHPC$Time)
 HHPC <- HHPC[,c(ncol(HHPC), 1:(ncol(HHPC)-1))]
 
 HHPC$DateTime <- as.POSIXct(HHPC$DateTime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
@@ -131,21 +127,6 @@ ggplot(data = by_month, aes(x = MonthYear, y = Global_active_power_kwh,
   labs(y= "Global Active Power") + ggtitle("Energy consumption per month - kwh") + 
   theme(axis.text.x=element_text(color=c("black","transparent","transparent"))) 
 
-# Pie chart Nov. 2010
-data_pie <- data_graph_day %>% group_by(month) %>% 
-  summarise(waterheater_airconditioner = sum(waterheat_aircond_kwh), 
-            kitchen = sum(kitchen_kwh), laundry = sum(laundry_kwh), 
-            Other = sum(Other_kwh))
-
-data_pie <- melt(as.data.frame(data_pie), id=c("month"))                     
-data_pie$month <- NULL
-names(data_pie)[names(data_pie) == 'variable'] <- '.'
-
-ggplot(data_pie, aes(x="", y=value, fill= .))+
-  geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + 
-  theme(text = element_text(size=25)) + theme(axis.text = element_blank(),
-                                              axis.ticks = element_blank(),
-                                              panel.grid  = element_blank())
 
 ########### *by week #######
 by_week <- HHPC_dst %>% group_by(WeekYear, month, Year, MonthYear) %>% 
@@ -189,6 +170,22 @@ ggplot(data = data_graph_day, aes(x = Date, y = cumsum, group = 1,
                                             "black","transparent", "black","transparent", 
                                             "black","transparent", "black","transparent", 
                                             "black","transparent", "black"))
+
+# Pie chart Nov. 2010
+data_pie <- data_graph_day %>% group_by(month) %>% 
+  summarise(waterheater_airconditioner = sum(waterheat_aircond_kwh), 
+            kitchen = sum(kitchen_kwh), laundry = sum(laundry_kwh), 
+            Other = sum(Other_kwh))
+
+data_pie <- melt(as.data.frame(data_pie), id=c("month"))                     
+data_pie$month <- NULL
+names(data_pie)[names(data_pie) == 'variable'] <- '.'
+
+ggplot(data_pie, aes(x="", y=value, fill= .))+
+  geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + 
+  theme(text = element_text(size=25)) + theme(axis.text = element_blank(),
+                                              axis.ticks = element_blank(),
+                                              panel.grid  = element_blank())
 
 # Compare last month
 data_oct_2010 <- filter(by_day,MonthYear %in% "10 - 2010")
