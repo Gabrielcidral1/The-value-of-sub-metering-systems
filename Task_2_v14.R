@@ -1,6 +1,6 @@
 # Energy consumption task
 
-pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries)
+pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera)
 
 ##### Data import #####
 
@@ -305,7 +305,7 @@ plot(decompose(ts_month))
 tslm <- tslm(Global_active_power_kwh~season + trend,df_tslm)
 fc_tslm <- forecast(tslm, h=36)
 autoplot(fc_tslm)
-summary(fc_tslm)
+
 
 ###### *Holt-winters ######
 
@@ -314,14 +314,12 @@ HW_fixed <- HoltWinters(x = ts_month)
 
 HW_fixed.pred1 <- forecast(HW_fixed,h= 15)
 autoplot(HW_fixed.pred1)
-summary(HW_fixed.pred1)
 
 # Week
 HW_week <- HoltWinters(x = ts_week, seasonal = "additive")
 
 HW_fixed.pred.week <- forecast(HW_week,h= 50)
 autoplot(HW_fixed.pred.week, ylim = c(0,400))
-summary(HW_fixed.pred.week)
 
 ######## *Arima ############
 
@@ -332,7 +330,6 @@ arima_month <- arima(ts_month, order = c(0,0,0),
                      seasonal = list(order = c(1,1,0), period = 12))
 arima_month.pre <- forecast(arima_month, h=20)
 plot(arima_month.pre)
-summary(arima_month.pre)
 
 # Week
 auto.arima(ts_week)
@@ -341,12 +338,10 @@ arima_week <- arima(ts_week, order = c(1,0,2),
                     seasonal = list(order = c(1,0,0), period = 52))
 arima_week.pred <- forecast(arima_week, h=20)
 plot(arima_week.pred)
-summary(arima_week.pred)
 
 ######## naive 
 snaive_month <- snaive(ts_month, h=20)
 plot(snaive_month)
-summary(snaive_month)
 
 # Train and Test sets
 
@@ -357,9 +352,9 @@ arima_month.cv <- arima(train, order = c(0,0,0),
 
 arima_month.pre.cv <- forecast(arima_month.cv, h=12)
 
-HW_fixed.cv <- HoltWinters(x = train, )
+HW_fixed.cv <- HoltWinters(x = train)
 
-HW_fixed.pred1.cv <- forecast(HW_fixed.cv,h= 12)
+HW_fixed.pred1.cv <- forecast(HW_fixed.cv, h = 12)
 
 snaive.fit <- snaive(train, h = 12)
 
@@ -371,8 +366,17 @@ autoplot(window(ts_month, start=c(2007,1))) +
   ggtitle("Forecasts of energy consumption") +
   guides(colour=guide_legend(title="Forecast"))
 
-test <- window(ts_month, start=c(2009,10))
+test <- window(ts_month, start=c(2009,11))
 accuracy(snaive.fit, test)
 accuracy(arima_month.pre.cv, test)
 accuracy(HW_fixed.pred1.cv, test)
 
+x <- cbind(HW = HW_fixed.pred1.cv$mean,SNAIVE = snaive.fit$mean)
+
+mix.model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
+
+z <- ts(predict(mix.model, x , test, type='response'), start=c(2009,11), freq=12)
+df <- cbind(ts_month, z)
+colnames(df) <- c("Data","Combined model")
+autoplot(df) + ylab("kw")
+summary(mix.model)
