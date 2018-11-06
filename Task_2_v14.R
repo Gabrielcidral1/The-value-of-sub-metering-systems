@@ -375,6 +375,9 @@ x <- cbind(HW = HW_fixed.pred1.cv$mean,SNAIVE = snaive.fit$mean)
 
 mix.model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
 
+summary(mix.model)
+plot(mix.model)
+
 z <- ts(predict(mix.model, x , test, type='response'), start=c(2009,11), freq=12)
 df <- cbind(ts_month, z)
 colnames(df) <- c("Data","Combined model")
