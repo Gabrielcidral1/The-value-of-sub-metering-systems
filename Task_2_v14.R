@@ -25,13 +25,13 @@ HHPC$DateTime <- as.POSIXct(HHPC$DateTime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
 # Treat NAs
 
-y <- na.locf(object = HHPC, maxgap = 30)
+y <- na.locf(object = HHPC, maxgap = 30) # Replace NA to previous value, unless 30 consecutive NAs (these rows are excluded in variable y) 
 
-HHPC <- merge(HHPC,y[ , -c(2,3)], by = "DateTime", all.x = T)
+HHPC <- merge(HHPC,y[ , -c(2,3)], by = "DateTime", all.x = T) # Merge and keep all rows in HHPC, so some rows will generate NA
 
-HHPC <- HHPC[ , -c(4:10)]
+HHPC <- HHPC[ , -c(4:10)] # Exclude original columns and keep the ones from the merge
 
-HHPC[is.na(HHPC)] <- 0 
+HHPC[is.na(HHPC)] <- 0 # replace remaining NA to zero (cases with more than 30 consecutive NAs)
 
 names(HHPC) <- c("DateTime", "Date", "Time", "Global_active_power", "Global_reactive_power", 
                  "Voltage",  "Global_intensity", "Sub_metering_1", "Sub_metering_2", "Sub_metering_3")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
@@ -76,6 +76,14 @@ HHPC_dst$Hour <- hour(HHPC_dst$DateTime)
 HHPC_dst$Week <- week(HHPC_dst$DateTime)
 
 HHPC_dst$WeekYear <- paste(HHPC_dst$Week,"-",HHPC_dst$Year)
+
+# Create column diff energy by minute 
+
+HHPC_dst$diff.active <- lag(HHPC_dst$Global_active_power_kwh, 1, na.pad = T)
+
+HHPC_dst$diff.active <- HHPC_dst$diff.active - HHPC_dst$Global_active_power_kwh
+
+
 
 ####### Data by year, month, week, day and hour #######
 
@@ -287,10 +295,9 @@ ggplot(data = by_hour_cons_wkday,
 ts_month <- ts(by_month$Global_active_power_kwh, frequency=12, start = c(2007, 1), 
                end = c(2010, 10))
 adf.test(ts_month) # test if stationary data
-plot(ts_month)
+pplot(ts_month)
 plot(decompose(ts_month))
-df_tslm <- data.frame(Global_active_power_kwh = ts_month, as.numeric(time(ts_month)))
-names(df_tslm) <- c("Global_active_power_kwh", "time")
+
 
 # Week
 ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
@@ -302,6 +309,10 @@ plot(decompose(ts_month))
 ###################### Models
 
 ####### tslm
+df_tslm <- data.frame(Global_active_power_kwh = ts_month, as.numeric(time(ts_month)))
+names(df_tslm) <- c("Global_active_power_kwh", "time")
+
+
 tslm <- tslm(Global_active_power_kwh~season + trend,df_tslm)
 fc_tslm <- forecast(tslm, h=36)
 autoplot(fc_tslm)
@@ -324,7 +335,7 @@ autoplot(HW_fixed.pred.week, ylim = c(0,400))
 ######## *Arima ############
 
 # Month
-auto.arima(ts_month)
+auto.arima(ts_month) # This steps helps you to define parameters of arima
 
 arima_month <- arima(ts_month, order = c(0,0,0), 
                      seasonal = list(order = c(1,1,0), period = 12))
