@@ -1,6 +1,6 @@
 # Energy consumption task
 
-pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera)
+pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera, xlsx)
 
 ##### Data import #####
 
@@ -295,23 +295,37 @@ ggplot(data = by_hour_cons_wkday,
 ts_month <- ts(by_month$Global_active_power_kwh, frequency=12, start = c(2007, 1), 
                end = c(2010, 10))
 adf.test(ts_month) # test if stationary data
-pplot(ts_month)
+plot(ts_month)
 plot(decompose(ts_month))
-
+dec <- decompose(ts_month)
 
 # Week
 ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
               end = c(2010,48))
-adf.test(ts_week)
+adf.test(ts_week) # test for stationarity (mean and variance doesn't change over time)
 plot(ts_week)
-plot(decompose(ts_month))
+
+
+# Day
+
+inds <- seq(as.Date("2014-01-01"), as.Date("2015-11-26"), by = "day")
+
+## Create a time series object
+set.seed(25)
+ts_day <- ts(by_day,     # random data
+           start = c(2014, as.numeric(format(inds[1], "%j"))),
+           frequency = 365)
+
+ts_day <- ts(by_day$Global_active_power_kwh, frequency = 365, start = c(2007, 1), end = c(2010,326))
+plot(ts_day)
+
+window(ts_day, start=c(2007,1), end=c(2009,365))
 
 ###################### Models
 
 ####### tslm
 df_tslm <- data.frame(Global_active_power_kwh = ts_month, as.numeric(time(ts_month)))
 names(df_tslm) <- c("Global_active_power_kwh", "time")
-
 
 tslm <- tslm(Global_active_power_kwh~season + trend,df_tslm)
 fc_tslm <- forecast(tslm, h=36)
@@ -335,18 +349,16 @@ autoplot(HW_fixed.pred.week, ylim = c(0,400))
 ######## *Arima ############
 
 # Month
-auto.arima(ts_month) # This steps helps you to define parameters of arima
 
-arima_month <- arima(ts_month, order = c(0,0,0), 
-                     seasonal = list(order = c(1,1,0), period = 12))
+arima_month <- auto.arima(ts_month)
+
 arima_month.pre <- forecast(arima_month, h=20)
+
 plot(arima_month.pre)
 
 # Week
-auto.arima(ts_week)
 
-arima_week <- arima(ts_week, order = c(1,0,2), 
-                    seasonal = list(order = c(1,0,0), period = 52))
+arima_week <- auto.arima(ts_week)
 arima_week.pred <- forecast(arima_week, h=20)
 plot(arima_week.pred)
 
@@ -356,10 +368,11 @@ plot(snaive_month)
 
 # Train and Test sets
 
-train <- window(ts_month,start=c(2007,10),end=c(2009,10))
+# train
+train <- window(ts_month,start=c(2007,10),end=c(2009,10)) # create a cut in ts
 
 arima_month.cv <- arima(train, order = c(0,0,0), 
-                     seasonal = list(order = c(1,1,0), period = 12))
+                     seasonal = list(order = c(1,1,0), period = 12)) # there was an error using auto arima, so I had to input parameters by hand
 
 arima_month.pre.cv <- forecast(arima_month.cv, h=12)
 
@@ -369,7 +382,7 @@ HW_fixed.pred1.cv <- forecast(HW_fixed.cv, h = 12)
 
 snaive.fit <- snaive(train, h = 12)
 
-autoplot(window(ts_month, start=c(2007,1))) +
+autoplot(ts_month, start=c(2007,1)) +
   autolayer(snaive.fit, series="Seasonal naïve", PI=FALSE) +
   autolayer(arima_month.pre.cv, series="Auto arima", PI=FALSE) +
   autolayer(HW_fixed.pred1.cv, series="Holt Winters", PI=FALSE) +
@@ -377,10 +390,15 @@ autoplot(window(ts_month, start=c(2007,1))) +
   ggtitle("Forecasts of energy consumption") +
   guides(colour=guide_legend(title="Forecast"))
 
+
+# test
+
 test <- window(ts_month, start=c(2009,11))
 accuracy(snaive.fit, test)
 accuracy(arima_month.pre.cv, test)
 accuracy(HW_fixed.pred1.cv, test)
+
+# Combine models
 
 x <- cbind(HW = HW_fixed.pred1.cv$mean,SNAIVE = snaive.fit$mean)
 
@@ -389,8 +407,26 @@ mix.model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
 summary(mix.model)
 plot(mix.model)
 
-z <- ts(predict(mix.model, x , test, type='response'), start=c(2009,11), freq=12)
+z <- ts(predict(mix.model , test, type='response'), start=c(2009,11), freq=12)
 df <- cbind(ts_month, z)
 colnames(df) <- c("Data","Combined model")
 autoplot(df) + ylab("kw")
 summary(mix.model)
+
+class(mix.model)
+
+class(HW_fixed.pred1.cv)
+
+forecast(mix.model, h = 12)
+
+# export tables for power bi analysis
+
+by_month_powerbi <- select(by_month, Global_active_power_kwh)
+
+
+write.xlsx(by_month, file = "by_month.xlsx")
+
+write.csv2(by_month_powerbi, "by_month_powerbi.csv", 
+          row.names = F, na = "null", dec = ",")
+
+
