@@ -1,6 +1,6 @@
 # Energy consumption task
 
-pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera, xlsx)
+pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera, xlsx, forecastHybrid)
 
 ##### Data import #####
 
@@ -83,8 +83,6 @@ HHPC_dst$diff.active <- lag(HHPC_dst$Global_active_power_kwh, 1, na.pad = T)
 
 HHPC_dst$diff.active <- HHPC_dst$diff.active - HHPC_dst$Global_active_power_kwh
 
-
-
 ####### Data by year, month, week, day and hour #######
 
 #### *by year####
@@ -98,7 +96,7 @@ by_year <- HHPC_dst %>% group_by(Year) %>%
 
 by_year <- by_year[!(by_year$Year == "2006"),]
 
-by_year <- melt(as.data.frame(by_year), id=c("Year","Global_reactive_power",
+by_year <- melt(as.data.frame(by_year),  id=c("Year","Global_reactive_power",
                                              "Global_active_power_kwh","Voltage", 
                                              "Global_intensity"))
 
@@ -233,6 +231,12 @@ by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) 
             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 
+by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
+  summarise_at(.vars = Global_reactive_power)
+
+summarise_each (funs(mean) , mean_mpg = mpg)
+
+
 by_hour$Hour <- by_hour$Hour*100
 by_hour$Hour <- substr(as.POSIXct(sprintf("%04.0f", by_hour$Hour), format='%H%M'), 12, 16)
 write.table(by_hour, "by_hour.txt", sep=";", row.names = F)
@@ -297,7 +301,11 @@ ts_month <- ts(by_month$Global_active_power_kwh, frequency=12, start = c(2007, 1
 adf.test(ts_month) # test if stationary data
 plot(ts_month)
 plot(decompose(ts_month))
-dec <- decompose(ts_month)
+dec.month <- decompose(ts_month)
+
+plot(stl(ts_month, s.window = 12))
+
+sum(abs(x = dec.month$random), na.rm = T) # check the total absolute random
 
 # Week
 ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
@@ -305,21 +313,32 @@ ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1)
 adf.test(ts_week) # test for stationarity (mean and variance doesn't change over time)
 plot(ts_week)
 
+dec.week <- decompose(ts_week)
+
+plot(stl(ts_month, s.window = 12))
+
+sum(abs(x = dec.week$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
+
 
 # Day
 
-inds <- seq(as.Date("2014-01-01"), as.Date("2015-11-26"), by = "day")
+inds <- seq(as.Date("2007-01-01"), as.Date("2010-11-26"), by = "day") # Create a daily Date object 
 
 ## Create a time series object
 set.seed(25)
-ts_day <- ts(by_day,     # random data
-           start = c(2014, as.numeric(format(inds[1], "%j"))),
+ts_day <- ts(by_day$Global_active_power_kwh, start = c(2007, as.numeric(format(inds[1], "%j"))), # inds[1] means first day / %j means the day of the year (from 001 to 365)
            frequency = 365)
 
-ts_day <- ts(by_day$Global_active_power_kwh, frequency = 365, start = c(2007, 1), end = c(2010,326))
 plot(ts_day)
 
-window(ts_day, start=c(2007,1), end=c(2009,365))
+train.day <- window(ts_day, start=c(2007,001), end=c(2009,365))
+
+
+dec.day <- decompose(ts_day)
+
+plot(stl(ts_month, s.window = 12))
+
+sum(abs(x = dec.day$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
 
 ###################### Models
 
@@ -331,13 +350,12 @@ tslm <- tslm(Global_active_power_kwh~season + trend,df_tslm)
 fc_tslm <- forecast(tslm, h=36)
 autoplot(fc_tslm)
 
-
 ###### *Holt-winters ######
 
 # Month
 HW_fixed <- HoltWinters(x = ts_month)
 
-HW_fixed.pred1 <- forecast(HW_fixed,h= 15)
+HW_fixed.pred1 <- forecast(HW_fixed,h= 20)
 autoplot(HW_fixed.pred1)
 
 # Week
@@ -390,7 +408,6 @@ autoplot(ts_month, start=c(2007,1)) +
   ggtitle("Forecasts of energy consumption") +
   guides(colour=guide_legend(title="Forecast"))
 
-
 # test
 
 test <- window(ts_month, start=c(2009,11))
@@ -398,16 +415,18 @@ accuracy(snaive.fit, test)
 accuracy(arima_month.pre.cv, test)
 accuracy(HW_fixed.pred1.cv, test)
 
-# Combine models
+# Combine models for test
 
 x <- cbind(HW = HW_fixed.pred1.cv$mean,SNAIVE = snaive.fit$mean)
 
 mix.model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
 
+w <- mix.model$weights
+
 summary(mix.model)
 plot(mix.model)
 
-z <- ts(predict(mix.model , test, type='response'), start=c(2009,11), freq=12)
+z <- ts(predict(mix.model, x, test, type='response'), start=c(2009,11), freq=12)
 df <- cbind(ts_month, z)
 colnames(df) <- c("Data","Combined model")
 autoplot(df) + ylab("kw")
@@ -417,16 +436,52 @@ class(mix.model)
 
 class(HW_fixed.pred1.cv)
 
-forecast(mix.model, h = 12)
+######### hybrid model forecast ######
+
+mix.model <- hybridModel(ts_month, models = c("z", "e", "s"), weights = "insample") # a = auto.arima, z = snaive, e = ets, s = stml
+
+mix.model.fore <- forecast(mix.model, h = 20)
+
+plot(mix.model.fore)
+
+mean(mix.model.fore$upper - mix.model.fore$lower)
+
+
+## loop for forecast combinations
+
+results <- c()
+names <- c()
+
+x <- c("a","e","n")
+y <- c("s","t","z")
+
+x <- as.vector(outer(x, y, paste, sep=""))
+
+for(i in x) {
+    
+    mix.model <- hybridModel(ts_month, models = x, weights = "insample.errors") # a = auto.arima, z = snaive, e = ets, s = stml
+
+mix.model.fore <- forecast(mix.model, h = 20)
+
+plot(mix.model.fore)
+
+mean <- mean(mix.model.fore$upper - mix.model.fore$lower)
+
+results <- cbind(mean, results)
+
+colnames(results) <- x
+
+}
+
 
 # export tables for power bi analysis
 
 by_month_powerbi <- select(by_month, Global_active_power_kwh)
 
+by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
 
 write.xlsx(by_month, file = "by_month.xlsx")
 
 write.csv2(by_month_powerbi, "by_month_powerbi.csv", 
-          row.names = F, na = "null", dec = ",")
-
+          row.names = F, na = "null")
 
