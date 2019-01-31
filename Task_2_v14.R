@@ -476,12 +476,8 @@ colnames(results) <- x
 
 # export tables for power bi analysis
 
-by_month_powerbi <- select(by_month, Global_active_power_kwh)
-
 by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
 
 write.xlsx(by_month, file = "by_month.xlsx")
 
-write.csv2(by_month_powerbi, "by_month_powerbi.csv", 
-          row.names = F, na = "null")
 
