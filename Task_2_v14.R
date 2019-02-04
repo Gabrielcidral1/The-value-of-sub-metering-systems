@@ -1,6 +1,7 @@
 # Energy consumption task
 
-pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, tseries, opera, xlsx, forecastHybrid)
+pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
+               tseries, opera, xlsx, forecastHybrid)
 
 ##### Data import #####
 
@@ -94,6 +95,20 @@ by_year <- HHPC_dst %>% group_by(Year) %>%
             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
             Global_intensity = mean(Global_intensity))
 
+for( i in c("Year")) {
+  for(j in c("by_year", "by_month")) {
+  
+by_year <- HHPC_dst %>% group_by(paste(i) %>% 
+  summarise(Global_reactive_power = sum(Global_reactive_power), 
+            Global_active_power_kwh = sum(Global_active_power_kwh), 
+            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
+            Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
+            Global_intensity = mean(Global_intensity))
+  }
+
+  }
+  
 by_year <- by_year[!(by_year$Year == "2006"),]
 
 by_year <- melt(as.data.frame(by_year),  id=c("Year","Global_reactive_power",
