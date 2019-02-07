@@ -1,7 +1,8 @@
 # Energy consumption task
 
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
-               tseries, opera, xlsx, forecastHybrid)
+               tseries, opera, xlsx, forecastHybrid, formatR)
+
 
 ##### Data import #####
 
@@ -246,11 +247,6 @@ by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) 
             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 
-by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
-  summarise_at(.vars = Global_reactive_power)
-
-summarise_each (funs(mean) , mean_mpg = mpg)
-
 
 by_hour$Hour <- by_hour$Hour*100
 by_hour$Hour <- substr(as.POSIXct(sprintf("%04.0f", by_hour$Hour), format='%H%M'), 12, 16)
@@ -316,11 +312,11 @@ ts_month <- ts(by_month$Global_active_power_kwh, frequency=12, start = c(2007, 1
 adf.test(ts_month) # test if stationary data
 plot(ts_month)
 plot(decompose(ts_month))
-dec.month <- decompose(ts_month)
+dec_month <- decompose(ts_month)
 
 plot(stl(ts_month, s.window = 12))
 
-sum(abs(x = dec.month$random), na.rm = T) # check the total absolute random
+sum(abs(x = dec_month$random), na.rm = T) # check the total absolute random
 
 # Week
 ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
@@ -328,11 +324,11 @@ ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1)
 adf.test(ts_week) # test for stationarity (mean and variance doesn't change over time)
 plot(ts_week)
 
-dec.week <- decompose(ts_week)
+dec_week <- decompose(ts_week)
 
 plot(stl(ts_month, s.window = 12))
 
-sum(abs(x = dec.week$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
+sum(abs(x = dec_week$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
 
 
 # Day
@@ -346,14 +342,14 @@ ts_day <- ts(by_day$Global_active_power_kwh, start = c(2007, as.numeric(format(i
 
 plot(ts_day)
 
-train.day <- window(ts_day, start=c(2007,001), end=c(2009,365))
+train_day <- window(ts_day, start=c(2007,001), end=c(2009,365))
 
 
-dec.day <- decompose(ts_day)
+dec_day <- decompose(ts_day)
 
 plot(stl(ts_month, s.window = 12))
 
-sum(abs(x = dec.day$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
+sum(abs(x = dec_day$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
 
 ###################### Models
 
@@ -370,14 +366,14 @@ autoplot(fc_tslm)
 # Month
 HW_fixed <- HoltWinters(x = ts_month)
 
-HW_fixed.pred1 <- forecast(HW_fixed,h= 20)
-autoplot(HW_fixed.pred1)
+HW_fixed_pred_1 <- forecast(HW_fixed,h= 20)
+autoplot(HW_fixed_pred_1)
 
 # Week
 HW_week <- HoltWinters(x = ts_week, seasonal = "additive")
 
-HW_fixed.pred.week <- forecast(HW_week,h= 50)
-autoplot(HW_fixed.pred.week, ylim = c(0,400))
+HW_fixed_pred_week <- forecast(HW_week,h= 50)
+autoplot(HW_fixed_pred_week, ylim = c(0,400))
 
 ######## *Arima ############
 
@@ -385,15 +381,15 @@ autoplot(HW_fixed.pred.week, ylim = c(0,400))
 
 arima_month <- auto.arima(ts_month)
 
-arima_month.pre <- forecast(arima_month, h=20)
+arima_month_pre <- forecast(arima_month, h=20)
 
-plot(arima_month.pre)
+plot(arima_month_pre)
 
 # Week
 
 arima_week <- auto.arima(ts_week)
-arima_week.pred <- forecast(arima_week, h=20)
-plot(arima_week.pred)
+arima_week_pred <- forecast(arima_week, h=20)
+plot(arima_week_pred)
 
 ######## naive 
 snaive_month <- snaive(ts_month, h=20)
@@ -404,21 +400,21 @@ plot(snaive_month)
 # train
 train <- window(ts_month,start=c(2007,10),end=c(2009,10)) # create a cut in ts
 
-arima_month.cv <- arima(train, order = c(0,0,0), 
+arima_month_cv <- arima(train, order = c(0,0,0), 
                      seasonal = list(order = c(1,1,0), period = 12)) # there was an error using auto arima, so I had to input parameters by hand
 
-arima_month.pre.cv <- forecast(arima_month.cv, h=12)
+arima_month_pre.cv <- forecast(arima_month_cv, h=12)
 
-HW_fixed.cv <- HoltWinters(x = train)
+HW_fixed_cv <- HoltWinters(x = train)
 
-HW_fixed.pred1.cv <- forecast(HW_fixed.cv, h = 12)
+HW_fixed_pred_1.cv <- forecast(HW_fixed_cv, h = 12)
 
-snaive.fit <- snaive(train, h = 12)
+snaive_fit <- snaive(train, h = 12)
 
 autoplot(ts_month, start=c(2007,1)) +
-  autolayer(snaive.fit, series="Seasonal naïve", PI=FALSE) +
-  autolayer(arima_month.pre.cv, series="Auto arima", PI=FALSE) +
-  autolayer(HW_fixed.pred1.cv, series="Holt Winters", PI=FALSE) +
+  autolayer(snaive_fit, series="Seasonal naïve", PI=FALSE) +
+  autolayer(arima_month_pre.cv, series="Auto arima", PI=FALSE) +
+  autolayer(HW_fixed_pred_1.cv, series="Holt Winters", PI=FALSE) +
   xlab("Year") + ylab("kw") +
   ggtitle("Forecasts of energy consumption") +
   guides(colour=guide_legend(title="Forecast"))
@@ -426,40 +422,40 @@ autoplot(ts_month, start=c(2007,1)) +
 # test
 
 test <- window(ts_month, start=c(2009,11))
-accuracy(snaive.fit, test)
-accuracy(arima_month.pre.cv, test)
-accuracy(HW_fixed.pred1.cv, test)
+accuracy(snaive_fit, test)
+accuracy(arima_month_pre.cv, test)
+accuracy(HW_fixed_pred_1.cv, test)
 
 # Combine models for test
 
-x <- cbind(HW = HW_fixed.pred1.cv$mean,SNAIVE = snaive.fit$mean)
+x <- cbind(HW = HW_fixed_pred_1.cv$mean,SNAIVE = snaive_fit$mean)
 
-mix.model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
+mix_model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
 
-w <- mix.model$weights
+w <- mix_model$weights
 
-summary(mix.model)
-plot(mix.model)
+summary(mix_model)
+plot(mix_model)
 
-z <- ts(predict(mix.model, x, test, type='response'), start=c(2009,11), freq=12)
+z <- ts(predict(mix_model, x, test, type='response'), start=c(2009,11), freq=12)
 df <- cbind(ts_month, z)
 colnames(df) <- c("Data","Combined model")
 autoplot(df) + ylab("kw")
-summary(mix.model)
+summary(mix_model)
 
-class(mix.model)
+class(mix_model)
 
-class(HW_fixed.pred1.cv)
+class(HW_fixed_pred_1.cv)
 
 ######### hybrid model forecast ######
 
-mix.model <- hybridModel(ts_month, models = c("z", "e", "s"), weights = "insample") # a = auto.arima, z = snaive, e = ets, s = stml
+mix_model <- hybridModel(ts_month, models = c("z", "e", "s"), weights = "insample") # a = auto.arima, z = snaive, e = ets, s = stml
 
-mix.model.fore <- forecast(mix.model, h = 20)
+mix_model_fore <- forecast(mix_model, h = 20)
 
-plot(mix.model.fore)
+plot(mix_model_fore)
 
-mean(mix.model.fore$upper - mix.model.fore$lower)
+mean(mix_model_fore$upper - mix_model_fore$lower)
 
 
 ## loop for forecast combinations
@@ -470,17 +466,17 @@ names <- c()
 x <- c("a","e","n")
 y <- c("s","t","z")
 
-x <- as.vector(outer(x, y, paste, sep=""))
+combination <- as.vector(outer(x, y, paste, sep=""))
 
-for(i in x) {
+for(i in combination) {
     
-    mix.model <- hybridModel(ts_month, models = x, weights = "insample.errors") # a = auto.arima, z = snaive, e = ets, s = stml
+    mix_model <- hybridModel(ts_month, models = x, weights = "insample.errors") # a = auto.arima, z = snaive, e = ets, s = stml
 
-mix.model.fore <- forecast(mix.model, h = 20)
+mix_model_fore <- forecast(mix_model, h = 20)
 
-plot(mix.model.fore)
+plot(mix_model_fore)
 
-mean <- mean(mix.model.fore$upper - mix.model.fore$lower)
+mean <- mean(mix_model_fore$upper - mix_model_fore$lower)
 
 results <- cbind(mean, results)
 
@@ -494,5 +490,7 @@ colnames(results) <- x
 by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
 
 write.xlsx(by_month, file = "by_month.xlsx")
+
+
 
 
