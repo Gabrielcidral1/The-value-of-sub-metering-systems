@@ -64,7 +64,7 @@ HHPC$kitchen_kwh <- HHPC$Sub_metering_1/1000
 HHPC$laundry_kwh <- HHPC$Sub_metering_2/1000
 HHPC$waterheat_aircond_kwh <- HHPC$Sub_metering_3/1000
 HHPC$Global_active_power_kwh <- HHPC$Global_active_power/60
-HHPC <- HHPC[,-c(4,8,9,10)] # delete old columns (sub 1, 2, 3)
+HHPC <- HHPC[,-which(names(HHPC) %in% c("Sub_metering_1","Sub_metering_2","Sub_metering_3"))]  # delete old columns (sub 1, 2, 3)
 HHPC$Other_kwh <- HHPC$Global_active_power_kwh - HHPC$kitchen_kwh - HHPC$laundry_kwh - 
   HHPC$waterheat_aircond_kwh
 
@@ -92,7 +92,7 @@ HHPC_dst$month <- month(HHPC_dst$DateTime, label =  FALSE, abbr = FALSE,
 
 HHPC_dst$MonthYear <- paste(HHPC_dst$month,"-",HHPC_dst$Year)
 
-HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime))
+#HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime))
 
 HHPC_dst$Hour <- hour(HHPC_dst$DateTime)
 
@@ -100,11 +100,6 @@ HHPC_dst$Week <- week(HHPC_dst$DateTime)
 
 HHPC_dst$WeekYear <- paste(HHPC_dst$Week,"-",HHPC_dst$Year)
 
-# Create column diff energy by minute 
-
-HHPC_dst$diff.active <- lag(HHPC_dst$Global_active_power_kwh, 1, na.pad = T)
-
-HHPC_dst$diff.active <- HHPC_dst$diff.active - HHPC_dst$Global_active_power_kwh
 
 ####### Data by year, month, week, day and hour #######
 
@@ -117,19 +112,20 @@ by_year <- HHPC_dst %>% group_by(Year) %>%
             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
             Global_intensity = mean(Global_intensity))
 
-for( i in c("Year")) {
-  for(j in c("by_year", "by_month")) {
-  
-by_year <- HHPC_dst %>% group_by(paste(i) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh), 
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
-            Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
-            Global_intensity = mean(Global_intensity))
-  }
 
-  }
+# for( i in c("Year")) {
+#   for(j in c("by_year", "by_month")) {
+#   
+# by_year <- HHPC_dst %>% group_by(paste(i) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh), 
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
+#             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
+#             Global_intensity = mean(Global_intensity))
+#   }
+# 
+#   }
   
 by_year <- by_year[!(by_year$Year == "2006"),]
 
@@ -508,9 +504,9 @@ colnames(results) <- x
 
 # export tables for power bi analysis
 
-by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
+#by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
 
-write.xlsx(by_month, file = "by_month.xlsx")
+write.csv(by_month, file = "by_month.csv")
 
 
 
