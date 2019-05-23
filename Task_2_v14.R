@@ -1,15 +1,49 @@
 # Energy consumption task
 
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
-               tseries, opera, xlsx, forecastHybrid, formatR)
+               tseries, opera, forecastHybrid, formatR, padr, RMySQL)
 
 
 ##### Data import #####
 
-HHPC <- read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualization/Task_1/household_power_consumption.txt", 
-                   ";", escape_double = FALSE, col_types = cols(Date = col_date(format = "%d/%m/%Y"), 
-                                                                Time = col_time(format = "%H:%M:%S"))
-                   , trim_ws = TRUE)
+
+## Create a database connection 
+con = dbConnect(MySQL(), user='deepAnalytics', password='Sqltask1234!', 
+                dbname='dataanalytics2018', 
+                host='data-analytics-2018.cbrosir2cswx.us-east-1.rds.amazonaws.com')
+
+# Data set INFORMATION -----
+## sub_metering_1: energy sub-metering No. 1 (in watt-hour of active energy). It corresponds to the kitchen, containing mainly a dishwasher, an oven and a microwave (hot plates are not electric but gas powered). 
+## sub_metering_2: energy sub-metering No. 2 (in watt-hour of active energy). It corresponds to the laundry room, containing a washing-machine, a tumble-drier, a refrigerator and a light. 
+## sub_metering_3: energy sub-metering No. 3 (in watt-hour of active energy). It corresponds to an electric water-heater and an air-conditioner.
+
+# Load data-----
+j <- c("yr_2006", "yr_2007", "yr_2008", "yr_2009", "yr_2010") # Should it be only from 2007 to 2009?
+HHPC <- c()
+for (i in 1:length(j)) {
+  X <- dbGetQuery(con, 
+                  paste("SELECT * FROM ",
+                        j[i]))
+  HHPC <- rbind(HHPC,X)
+}
+rm(X, i, j)
+df$id <- NULL
+
+HHPC$DateTime <- paste(HHPC$Date, HHPC$Time)
+
+HHPC$DateTime <- ymd_hms(HHPC$DateTime)
+
+HHPC <- pad(x = HHPC, break_above = 3)
+
+# Fill NAs with data ----
+# For the ones that are less than three minutes:
+for (i in 4:ncol(HHPC)){
+  HHPC[ ,i] <- na.locf(HHPC[ ,i], maxgap = 3 )
+  
+} 
+#We consider that the 3 min gap is the time the meters and submeters need for software updates.
+
+HHPC[is.na(HHPC)] <- 0
 
 ##### Exploratory analysis #####
 
@@ -25,19 +59,6 @@ HHPC <- HHPC[,c(ncol(HHPC), 1:(ncol(HHPC)-1))]
 
 HHPC$DateTime <- as.POSIXct(HHPC$DateTime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
-# Treat NAs
-
-y <- na.locf(object = HHPC, maxgap = 30) # Replace NA to previous value, unless 30 consecutive NAs (these rows are excluded in variable y) 
-
-HHPC <- merge(HHPC,y[ , -c(2,3)], by = "DateTime", all.x = T) # Merge and keep all rows in HHPC, so some rows will generate NA
-
-HHPC <- HHPC[ , -c(4:10)] # Exclude original columns and keep the ones from the merge
-
-HHPC[is.na(HHPC)] <- 0 # replace remaining NA to zero (cases with more than 30 consecutive NAs)
-
-names(HHPC) <- c("DateTime", "Date", "Time", "Global_active_power", "Global_reactive_power", 
-                 "Voltage",  "Global_intensity", "Sub_metering_1", "Sub_metering_2", "Sub_metering_3")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-  
 # Scale conversion
 HHPC$kitchen_kwh <- HHPC$Sub_metering_1/1000
 HHPC$laundry_kwh <- HHPC$Sub_metering_2/1000
