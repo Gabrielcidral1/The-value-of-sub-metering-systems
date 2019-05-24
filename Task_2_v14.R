@@ -1,7 +1,7 @@
 # Energy consumption task
 
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
-               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet)
+               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, data.table)
 
 
 ##### Data import #####
@@ -27,7 +27,6 @@ for (i in 1:length(j)) {
   HHPC <- rbind(HHPC,X)
 }
 rm(X, i, j)
-df$id <- NULL
 
 HHPC$DateTime <- paste(HHPC$Date, HHPC$Time)
 
@@ -100,20 +99,21 @@ HHPC_dst$Week <- week(HHPC_dst$DateTime)
 
 HHPC_dst$WeekYear <- paste(HHPC_dst$Week,"-",HHPC_dst$Year)
 
+HHPC_dst$Date <- as.Date(HHPC_dst$DateTime, "%d/%m/%Y",tz = "GMT")
 
 ####### Data by year, month, week, day and hour #######
 
 #### *by year####
-by_year <- HHPC_dst %>% group_by(Year) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh), 
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
-            Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
-            Global_intensity = mean(Global_intensity))
+# by_year <- HHPC_dst %>% group_by(Year) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh), 
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
+#             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
+#             Global_intensity = mean(Global_intensity))
 
 granularity <- list()
-group <- as.list(c("Year","MonthYear"))
+group <- as.list(c("Year","MonthYear","WeekYear","Date"))
 
 for(i in group) {
 
@@ -128,198 +128,198 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
 
 
 
-by_year <- by_year[!(by_year$Year == "2006"),]
+granularity$Year <- granularity$Year[!(granularity$Year$Year == "2006"),]
 
-by_year <- melt(as.data.frame(by_year),  id=c("Year","Global_reactive_power",
+granularity$Year <- melt(as.data.frame(granularity$Year),  id=c("Year","Global_reactive_power",
                                              "Global_active_power_kwh","Voltage", 
                                              "Global_intensity"))
 
-names(by_year)[names(by_year) == 'variable'] <- 'Sub_type' # Rename
-names(by_year)[names(by_year) == 'value'] <- 'Active_Power_Sub'# Rename
+names(granularity$Year)[names(granularity$Year) == 'variable'] <- 'Sub_type' # Rename
+names(granularity$Year)[names(granularity$Year) == 'value'] <- 'Active_Power_Sub'# Rename
 
-ggplot(data = by_year, aes(x = Year, y = Active_Power_Sub, fill = Sub_type)) + 
-  geom_bar(stat = "identity") + 
-  theme(text = element_text(size=20)) + labs(y= "Global Active Power") + 
-  ggtitle("Energy consumption per year")
+# ggplot(data = by_year, aes(x = Year, y = Active_Power_Sub, fill = Sub_type)) + 
+#   geom_bar(stat = "identity") + 
+#   theme(text = element_text(size=20)) + labs(y= "Global Active Power") + 
+#   ggtitle("Energy consumption per year")
 
 ##### *by month ####
-by_month <- HHPC_dst %>% group_by(MonthYear, month, Year) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh),
-            Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
+# by_month <- HHPC_dst %>% group_by(MonthYear, month, Year) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh),
+#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 
 by_month <- by_month[!(by_month$MonthYear == "12 - 2006"),] # excluding incomplete month
 by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
 
-by_month <- by_month[order(by_month$Year,by_month$month),] # Order for graph
-by_month <- transform(by_month, MonthYear = factor(MonthYear, levels = MonthYear))
-
-ggplot(data = by_month, aes(x = MonthYear, y = Global_active_power_kwh, 
-                            group = 1, label = round(Global_active_power_kwh,0))) + 
-  geom_line(stat = "identity", color = "blue", size = 2)+ 
-  geom_point(size=4, color = "blue") + theme(text = element_text(size=20), 
-                                             axis.text.x = element_text(angle = 50, 
-                                                                        hjust = 1),
-                                             panel.background = element_rect(fill='gray95', 
-                                                                             colour='gray100')) + 
-  labs(y= "Global Active Power") + ggtitle("Energy consumption per month - kwh") + 
-  theme(axis.text.x=element_text(color=c("black","transparent","transparent"))) 
-
+# by_month <- by_month[order(by_month$Year,by_month$month),] # Order for graph
+# by_month <- transform(by_month, MonthYear = factor(MonthYear, levels = MonthYear))
+# 
+# ggplot(data = by_month, aes(x = MonthYear, y = Global_active_power_kwh, 
+#                             group = 1, label = round(Global_active_power_kwh,0))) + 
+#   geom_line(stat = "identity", color = "blue", size = 2)+ 
+#   geom_point(size=4, color = "blue") + theme(text = element_text(size=20), 
+#                                              axis.text.x = element_text(angle = 50, 
+#                                                                         hjust = 1),
+#                                              panel.background = element_rect(fill='gray95', 
+#                                                                              colour='gray100')) + 
+#   labs(y= "Global Active Power") + ggtitle("Energy consumption per month - kwh") + 
+#   theme(axis.text.x=element_text(color=c("black","transparent","transparent"))) 
+# 
 
 ########### *by week #######
-by_week <- HHPC_dst %>% group_by(WeekYear, month, Year, MonthYear) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh),
-            Voltage = mean(Voltage),
-            Global_intensity = mean(Global_intensity),
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-
-by_week <- by_week[!(by_week$Year == "2006"),]
+# by_week <- HHPC_dst %>% group_by(WeekYear, month, Year, MonthYear) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh),
+#             Voltage = mean(Voltage),
+#             Global_intensity = mean(Global_intensity),
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
+# 
+# by_week <- by_week[!(by_week$Year == "2006"),]
 
 ########## *by day ##########
-HHPC_dst$Date <- as.Date(HHPC_dst$DateTime, "%d/%m/%Y",tz = "GMT")
-
-by_day <- HHPC_dst %>% group_by(Date,Day_week, month, Year, MonthYear) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh),
-            Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-
-data_graph_day <- filter(by_day,MonthYear %in% "11 - 2010")
-
-data_graph_day$cumsum <- cumsum(data_graph_day$Global_active_power_kwh)
-
-ggplot(data = data_graph_day, aes(x = Date, y = cumsum, group = 1, 
-                                  label = round(cumsum,0))) + geom_line(stat = "identity", 
-                                                                        color = "blue", 
-                                                                        size = 2)+ 
-  geom_point(size=4, color = "blue") + theme(text = element_text(size=20), 
-                                             axis.text.x = element_text(angle = 0, 
-                                                                        hjust = 1),
-                                             panel.background = element_rect(fill='gray95', 
-                                                                             colour='gray100')) + 
-  labs(y= "Global Active Power") + ggtitle("Daily energy consumption - kwh") + 
-  geom_text(vjust = 1.5, size = 8,color = c("transparent", "black","transparent", 
-                                            "black","transparent", "black","transparent", 
-                                            "black","transparent", "black","transparent", 
-                                            "black","transparent", "black","transparent", 
-                                            "black","transparent", "black","transparent", 
-                                            "black","transparent", "black","transparent", 
-                                            "black","transparent", "black"))
-
-# Pie chart Nov. 2010
-data_pie <- data_graph_day %>% group_by(month) %>% 
-  summarise(waterheater_airconditioner = sum(waterheat_aircond_kwh), 
-            kitchen = sum(kitchen_kwh), laundry = sum(laundry_kwh), 
-            Other = sum(Other_kwh))
-
-data_pie <- melt(as.data.frame(data_pie), id=c("month"))                     
-data_pie$month <- NULL
-names(data_pie)[names(data_pie) == 'variable'] <- '.'
-
-ggplot(data_pie, aes(x="", y=value, fill= .))+
-  geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + 
-  theme(text = element_text(size=25)) + theme(axis.text = element_blank(),
-                                              axis.ticks = element_blank(),
-                                              panel.grid  = element_blank())
-
-# Compare last month
-data_oct_2010 <- filter(by_day,MonthYear %in% "10 - 2010")
-data_oct_2010 <- filter(data_oct_2010,Date != "2010-10-31" & Date != "2010-10-30" & 
-                          Date != "2010-10-29"& Date != "2010-10-28"& 
-                          Date != "2010-10-27")
-
-sum(data_oct_2010$Global_active_power_kwh)
-
-# Compare same month last year
-data_nov_2009 <- filter(by_day,MonthYear %in% "11 - 2009")
-data_nov_2009 <- filter(data_nov_2009,Date != "2009-11-30" & Date != "2009-11-29"& 
-                          Date != "2009-11-28"& Date != "2009-11-27")
-
-sum(data_nov_2009$Global_active_power_kwh)
 
 
-# Analysis on weekly consumption behaviour 
-data_by_wday <- HHPC_dst %>% group_by(Day_week) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh),
-            Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-
-ggplot(data = data_by_wday, aes(x = Day_week, y = Global_active_power_kwh)) +
-  geom_bar(stat = "identity") + theme(text = element_text(size=20)) + 
-  labs(y= "Global Active Power") + 
-  ggtitle("Energy consumption per day of the week")
-
-
-############ *by hour ##########
-by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
-  summarise(Global_reactive_power = sum(Global_reactive_power), 
-            Global_active_power_kwh = sum(Global_active_power_kwh),
-            Voltage = mean(Voltage),Global_intensity = mean(Global_intensity), 
-            kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-            waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-
-
-by_hour$Hour <- by_hour$Hour*100
-by_hour$Hour <- substr(as.POSIXct(sprintf("%04.0f", by_hour$Hour), format='%H%M'), 12, 16)
-write.table(by_hour, "by_hour.txt", sep=";", row.names = F)
-by_hour=read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualization/Task_1/by_hour.txt", 
-                   ";", escape_double = FALSE, col_types = cols(Date = col_date(format = "%Y-%m-%d"), 
-                                                                Hour = col_time(format = "%H:%M")), locale = locale(), trim_ws = TRUE)
-
-by_hour <- cbind(by_hour,paste(by_hour$Date,by_hour$Hour), stringsAsFactors=FALSE) 
-names(by_hour)[names(by_hour) == "paste(by_hour$Date, by_hour$Hour)"] <- 'DateTime'
-by_hour <- by_hour[,c(ncol(by_hour), 1:(ncol(by_hour)-1))]
-
-#### Analysis on daily consumption behaviour #####
-
-# Weekend 
-
-list <- c("Saturday", "Sunday")
-by_hour_cons <- filter(by_hour,Year == "2010" & Day_week %in% list) 
-
-by_hour_cons <- by_hour_cons %>% group_by(Hour) %>% 
-  summarise(Global_active_power_kwh = mean(Global_active_power_kwh), 
-            kitchen_kwh = mean(kitchen_kwh), laundry_kwh = mean(laundry_kwh), 
-            waterheat_aircond_kwh = mean(waterheat_aircond_kwh), 
-            Other_kwh = mean(Other_kwh))
-
-ggplot(data = by_hour_cons, aes(x = Hour, y = Global_active_power_kwh, group = 1, 
-                                label = round(Global_active_power_kwh,0))) + 
-  geom_line(aes(y= kitchen_kwh, colour = "kitchen_kwh", size = 2)) + 
-  geom_line(aes(y= laundry_kwh, colour = "laundry_kwh", size = 2)) + 
-  geom_line(aes(y= waterheat_aircond_kwh, color = "waterheat_aircond_kwh", size = 2)) +
-  theme(text = element_text(size=20), axis.text.x = element_text(angle = 0, 
-                                                                 hjust = 1),panel.background = element_rect(fill='gray95', colour='gray100')) + 
-  labs(y= "Global Active Power") + ggtitle("Hourly energy consumption - kwh") 
-
-# Weekday
-
-list_wkday <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
-by_hour_cons_wkday <- filter(by_hour, Year == "2010" & Day_week %in% list_wkday) 
-
-by_hour_cons_wkday <- by_hour_cons_wkday %>% group_by(Hour) %>% 
-  summarise(Global_active_power_kwh = mean(Global_active_power_kwh),
-            kitchen_kwh = mean(kitchen_kwh), laundry_kwh = mean(laundry_kwh), 
-            waterheat_aircond_kwh = mean(waterheat_aircond_kwh), Other_kwh = mean(Other_kwh))
-
-ggplot(data = by_hour_cons_wkday, 
-       aes(x = Hour, y = Global_active_power_kwh, 
-           group = 1, label = round(Global_active_power_kwh,0))) + 
-  geom_line(aes(y= kitchen_kwh, colour = "kitchen_kwh", size = 2)) + 
-  geom_line(aes(y= laundry_kwh, colour = "laundry_kwh", size = 2)) + 
-  geom_line(aes(y= waterheat_aircond_kwh, color = "waterheat_aircond_kwh", size = 2)) +
-  theme(text = element_text(size=20), axis.text.x = element_text(angle = 0, 
-                                                                 hjust = 1),panel.background = element_rect(fill='gray95', colour='gray100')) + 
-  labs(y= "Global Active Power") + ggtitle("Hourly energy consumption - kwh") 
-
-
+# by_day <- HHPC_dst %>% group_by(Date,Day_week, month, Year, MonthYear) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh),
+#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
+# 
+# data_graph_day <- filter(by_day,MonthYear %in% "11 - 2010")
+# 
+# data_graph_day$cumsum <- cumsum(data_graph_day$Global_active_power_kwh)
+# 
+# ggplot(data = data_graph_day, aes(x = Date, y = cumsum, group = 1, 
+#                                   label = round(cumsum,0))) + geom_line(stat = "identity", 
+#                                                                         color = "blue", 
+#                                                                         size = 2)+ 
+#   geom_point(size=4, color = "blue") + theme(text = element_text(size=20), 
+#                                              axis.text.x = element_text(angle = 0, 
+#                                                                         hjust = 1),
+#                                              panel.background = element_rect(fill='gray95', 
+#                                                                              colour='gray100')) + 
+#   labs(y= "Global Active Power") + ggtitle("Daily energy consumption - kwh") + 
+#   geom_text(vjust = 1.5, size = 8,color = c("transparent", "black","transparent", 
+#                                             "black","transparent", "black","transparent", 
+#                                             "black","transparent", "black","transparent", 
+#                                             "black","transparent", "black","transparent", 
+#                                             "black","transparent", "black","transparent", 
+#                                             "black","transparent", "black","transparent", 
+#                                             "black","transparent", "black"))
+# 
+# # Pie chart Nov. 2010
+# data_pie <- data_graph_day %>% group_by(month) %>% 
+#   summarise(waterheater_airconditioner = sum(waterheat_aircond_kwh), 
+#             kitchen = sum(kitchen_kwh), laundry = sum(laundry_kwh), 
+#             Other = sum(Other_kwh))
+# 
+# data_pie <- melt(as.data.frame(data_pie), id=c("month"))                     
+# data_pie$month <- NULL
+# names(data_pie)[names(data_pie) == 'variable'] <- '.'
+# 
+# ggplot(data_pie, aes(x="", y=value, fill= .))+
+#   geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + 
+#   theme(text = element_text(size=25)) + theme(axis.text = element_blank(),
+#                                               axis.ticks = element_blank(),
+#                                               panel.grid  = element_blank())
+# 
+# # Compare last month
+# data_oct_2010 <- filter(by_day,MonthYear %in% "10 - 2010")
+# data_oct_2010 <- filter(data_oct_2010,Date != "2010-10-31" & Date != "2010-10-30" & 
+#                           Date != "2010-10-29"& Date != "2010-10-28"& 
+#                           Date != "2010-10-27")
+# 
+# sum(data_oct_2010$Global_active_power_kwh)
+# 
+# # Compare same month last year
+# data_nov_2009 <- filter(by_day,MonthYear %in% "11 - 2009")
+# data_nov_2009 <- filter(data_nov_2009,Date != "2009-11-30" & Date != "2009-11-29"& 
+#                           Date != "2009-11-28"& Date != "2009-11-27")
+# 
+# sum(data_nov_2009$Global_active_power_kwh)
+# 
+# 
+# # Analysis on weekly consumption behaviour 
+# data_by_wday <- HHPC_dst %>% group_by(Day_week) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh),
+#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
+# 
+# ggplot(data = data_by_wday, aes(x = Day_week, y = Global_active_power_kwh)) +
+#   geom_bar(stat = "identity") + theme(text = element_text(size=20)) + 
+#   labs(y= "Global Active Power") + 
+#   ggtitle("Energy consumption per day of the week")
+# 
+# 
+# ############ *by hour ##########
+# by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
+#   summarise(Global_reactive_power = sum(Global_reactive_power), 
+#             Global_active_power_kwh = sum(Global_active_power_kwh),
+#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity), 
+#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
+#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
+# 
+# 
+# by_hour$Hour <- by_hour$Hour*100
+# by_hour$Hour <- substr(as.POSIXct(sprintf("%04.0f", by_hour$Hour), format='%H%M'), 12, 16)
+# write.table(by_hour, "by_hour.txt", sep=";", row.names = F)
+# by_hour=read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualization/Task_1/by_hour.txt", 
+#                    ";", escape_double = FALSE, col_types = cols(Date = col_date(format = "%Y-%m-%d"), 
+#                                                                 Hour = col_time(format = "%H:%M")), locale = locale(), trim_ws = TRUE)
+# 
+# by_hour <- cbind(by_hour,paste(by_hour$Date,by_hour$Hour), stringsAsFactors=FALSE) 
+# names(by_hour)[names(by_hour) == "paste(by_hour$Date, by_hour$Hour)"] <- 'DateTime'
+# by_hour <- by_hour[,c(ncol(by_hour), 1:(ncol(by_hour)-1))]
+# 
+# #### Analysis on daily consumption behaviour #####
+# 
+# # Weekend 
+# 
+# list <- c("Saturday", "Sunday")
+# by_hour_cons <- filter(by_hour,Year == "2010" & Day_week %in% list) 
+# 
+# by_hour_cons <- by_hour_cons %>% group_by(Hour) %>% 
+#   summarise(Global_active_power_kwh = mean(Global_active_power_kwh), 
+#             kitchen_kwh = mean(kitchen_kwh), laundry_kwh = mean(laundry_kwh), 
+#             waterheat_aircond_kwh = mean(waterheat_aircond_kwh), 
+#             Other_kwh = mean(Other_kwh))
+# 
+# ggplot(data = by_hour_cons, aes(x = Hour, y = Global_active_power_kwh, group = 1, 
+#                                 label = round(Global_active_power_kwh,0))) + 
+#   geom_line(aes(y= kitchen_kwh, colour = "kitchen_kwh", size = 2)) + 
+#   geom_line(aes(y= laundry_kwh, colour = "laundry_kwh", size = 2)) + 
+#   geom_line(aes(y= waterheat_aircond_kwh, color = "waterheat_aircond_kwh", size = 2)) +
+#   theme(text = element_text(size=20), axis.text.x = element_text(angle = 0, 
+#                                                                  hjust = 1),panel.background = element_rect(fill='gray95', colour='gray100')) + 
+#   labs(y= "Global Active Power") + ggtitle("Hourly energy consumption - kwh") 
+# 
+# # Weekday
+# 
+# list_wkday <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+# by_hour_cons_wkday <- filter(by_hour, Year == "2010" & Day_week %in% list_wkday) 
+# 
+# by_hour_cons_wkday <- by_hour_cons_wkday %>% group_by(Hour) %>% 
+#   summarise(Global_active_power_kwh = mean(Global_active_power_kwh),
+#             kitchen_kwh = mean(kitchen_kwh), laundry_kwh = mean(laundry_kwh), 
+#             waterheat_aircond_kwh = mean(waterheat_aircond_kwh), Other_kwh = mean(Other_kwh))
+# 
+# ggplot(data = by_hour_cons_wkday, 
+#        aes(x = Hour, y = Global_active_power_kwh, 
+#            group = 1, label = round(Global_active_power_kwh,0))) + 
+#   geom_line(aes(y= kitchen_kwh, colour = "kitchen_kwh", size = 2)) + 
+#   geom_line(aes(y= laundry_kwh, colour = "laundry_kwh", size = 2)) + 
+#   geom_line(aes(y= waterheat_aircond_kwh, color = "waterheat_aircond_kwh", size = 2)) +
+#   theme(text = element_text(size=20), axis.text.x = element_text(angle = 0, 
+#                                                                  hjust = 1),panel.background = element_rect(fill='gray95', colour='gray100')) + 
+#   labs(y= "Global Active Power") + ggtitle("Hourly energy consumption - kwh") 
+# 
+# 
 ###################################### Forecast #############################################################
 
 #################### Time Series
@@ -370,14 +370,6 @@ plot(stl(ts_month, s.window = 12))
 sum(abs(x = dec_day$random), na.rm = T) # check the total absolute random (compare with monthly and daily)
 
 ###################### Models
-
-####### tslm
-df_tslm <- data.frame(Global_active_power_kwh = ts_month, as.numeric(time(ts_month)))
-names(df_tslm) <- c("Global_active_power_kwh", "time")
-
-tslm <- tslm(Global_active_power_kwh~season + trend,df_tslm)
-fc_tslm <- forecast(tslm, h=36)
-autoplot(fc_tslm)
 
 ###### *Holt-winters ######
 
@@ -459,48 +451,26 @@ z <- ts(predict(mix_model, x, test, type='response'), start=c(2009,11), freq=12)
 df <- cbind(ts_month, z)
 colnames(df) <- c("Data","Combined model")
 autoplot(df) + ylab("kw")
-summary(mix_model)
-
-class(mix_model)
-
-class(HW_fixed_pred_1.cv)
-
-######### hybrid model forecast ######
-
-mix_model <- hybridModel(ts_month, models = c("z", "e", "s"), weights = "insample") # a = auto.arima, z = snaive, e = ets, s = stml
-
-mix_model_fore <- forecast(mix_model, h = 20)
-
-plot(mix_model_fore)
-
-mean(mix_model_fore$upper - mix_model_fore$lower)
 
 
-## loop for forecast combinations
+##### Prophet
 
-results <- c()
-names <- c()
+HHPC_dst[is.na(HHPC_dst)] <- 0
 
-x <- c("a","e","n")
-y <- c("s","t","z")
+df_prophet <- HHPC_dst
 
-combination <- as.vector(outer(x, y, paste, sep=""))
+names(df_prophet)
 
-for(i in combination) {
-    
-    mix_model <- hybridModel(ts_month, models = x, weights = "insample.errors") # a = auto.arima, z = snaive, e = ets, s = stml
+df_prophet <- setnames(df_prophet, c("DateTime","Global_active_power_kwh"),c("ds","y"))
+m <- prophet(df = df_prophet) 
 
-mix_model_fore <- forecast(mix_model, h = 20)
+sum(is.na(df_prophet))
 
-plot(mix_model_fore)
+# Extend dataframe 100 days into the future
+future <- make_future_dataframe(m, periods = 100)
 
-mean <- mean(mix_model_fore$upper - mix_model_fore$lower)
-
-results <- cbind(mean, results)
-
-colnames(results) <- x
-
-}
+# Generate forecast for next 100 days
+forecast <- predict(m, future)
 
 
 # export tables for power bi analysis
