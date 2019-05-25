@@ -3,9 +3,7 @@
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
                tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, data.table)
 
-
 ##### Data import #####
-
 
 ## Create a database connection 
 con = dbConnect(MySQL(), user='deepAnalytics', password='Sqltask1234!', 
@@ -18,7 +16,7 @@ con = dbConnect(MySQL(), user='deepAnalytics', password='Sqltask1234!',
 ## sub_metering_3: energy sub-metering No. 3 (in watt-hour of active energy). It corresponds to an electric water-heater and an air-conditioner.
 
 # Load data-----
-j <- c("yr_2006", "yr_2007", "yr_2008", "yr_2009", "yr_2010") # Should it be only from 2007 to 2009?
+j <- c("yr_2006", "yr_2007", "yr_2008", "yr_2009", "yr_2010") 
 HHPC <- c()
 for (i in 1:length(j)) {
   X <- dbGetQuery(con, 
@@ -26,7 +24,7 @@ for (i in 1:length(j)) {
                         j[i]))
   HHPC <- rbind(HHPC,X)
 }
-rm(X, i, j)
+rm(X, j)
 
 HHPC$DateTime <- paste(HHPC$Date, HHPC$Time)
 
@@ -103,15 +101,6 @@ HHPC_dst$Date <- as.Date(HHPC_dst$DateTime, "%d/%m/%Y",tz = "GMT")
 
 ####### Data by year, month, week, day and hour #######
 
-#### *by year####
-# by_year <- HHPC_dst %>% group_by(Year) %>% 
-#   summarise(Global_reactive_power = sum(Global_reactive_power), 
-#             Global_active_power_kwh = sum(Global_active_power_kwh), 
-#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), 
-#             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
-#             Global_intensity = mean(Global_intensity))
-
 granularity <- list()
 group <- as.list(c("Year","MonthYear","WeekYear","Date"))
 
@@ -143,20 +132,20 @@ names(granularity$Year)[names(granularity$Year) == 'value'] <- 'Active_Power_Sub
 #   ggtitle("Energy consumption per year")
 
 ##### *by month ####
-# by_month <- HHPC_dst %>% group_by(MonthYear, month, Year) %>% 
+# granularity$MonthYear <- HHPC_dst %>% group_by(MonthYear, month, Year) %>% 
 #   summarise(Global_reactive_power = sum(Global_reactive_power), 
 #             Global_active_power_kwh = sum(Global_active_power_kwh),
 #             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
 #             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
 #             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 
-by_month <- by_month[!(by_month$MonthYear == "12 - 2006"),] # excluding incomplete month
-by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
+granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "12 - 2006"),] # excluding incomplete month
+granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "11 - 2010"),]
 
-# by_month <- by_month[order(by_month$Year,by_month$month),] # Order for graph
-# by_month <- transform(by_month, MonthYear = factor(MonthYear, levels = MonthYear))
+# granularity$MonthYear <- granularity$MonthYear[order(granularity$MonthYear$Year,granularity$MonthYear$month),] # Order for graph
+# granularity$MonthYear <- transform(granularity$MonthYear, MonthYear = factor(MonthYear, levels = MonthYear))
 # 
-# ggplot(data = by_month, aes(x = MonthYear, y = Global_active_power_kwh, 
+# ggplot(data = granularity$MonthYear, aes(x = MonthYear, y = Global_active_power_kwh, 
 #                             group = 1, label = round(Global_active_power_kwh,0))) + 
 #   geom_line(stat = "identity", color = "blue", size = 2)+ 
 #   geom_point(size=4, color = "blue") + theme(text = element_text(size=20), 
@@ -168,28 +157,14 @@ by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
 #   theme(axis.text.x=element_text(color=c("black","transparent","transparent"))) 
 # 
 
-########### *by week #######
-# by_week <- HHPC_dst %>% group_by(WeekYear, month, Year, MonthYear) %>% 
-#   summarise(Global_reactive_power = sum(Global_reactive_power), 
-#             Global_active_power_kwh = sum(Global_active_power_kwh),
-#             Voltage = mean(Voltage),
-#             Global_intensity = mean(Global_intensity),
-#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 # 
-# by_week <- by_week[!(by_week$Year == "2006"),]
+# granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
 
 ########## *by day ##########
 
 
-# by_day <- HHPC_dst %>% group_by(Date,Day_week, month, Year, MonthYear) %>% 
-#   summarise(Global_reactive_power = sum(Global_reactive_power), 
-#             Global_active_power_kwh = sum(Global_active_power_kwh),
-#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
-#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
 # 
-# data_graph_day <- filter(by_day,MonthYear %in% "11 - 2010")
+# data_graph_day <- filter(granularity$Date,MonthYear %in% "11 - 2010")
 # 
 # data_graph_day$cumsum <- cumsum(data_graph_day$Global_active_power_kwh)
 # 
@@ -228,7 +203,7 @@ by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
 #                                               panel.grid  = element_blank())
 # 
 # # Compare last month
-# data_oct_2010 <- filter(by_day,MonthYear %in% "10 - 2010")
+# data_oct_2010 <- filter(granularity$Date,MonthYear %in% "10 - 2010")
 # data_oct_2010 <- filter(data_oct_2010,Date != "2010-10-31" & Date != "2010-10-30" & 
 #                           Date != "2010-10-29"& Date != "2010-10-28"& 
 #                           Date != "2010-10-27")
@@ -236,7 +211,7 @@ by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
 # sum(data_oct_2010$Global_active_power_kwh)
 # 
 # # Compare same month last year
-# data_nov_2009 <- filter(by_day,MonthYear %in% "11 - 2009")
+# data_nov_2009 <- filter(granularity$Date,MonthYear %in% "11 - 2009")
 # data_nov_2009 <- filter(data_nov_2009,Date != "2009-11-30" & Date != "2009-11-29"& 
 #                           Date != "2009-11-28"& Date != "2009-11-27")
 # 
@@ -325,7 +300,7 @@ by_month <- by_month[!(by_month$MonthYear == "11 - 2010"),]
 #################### Time Series
 
 # Month
-ts_month <- ts(by_month$Global_active_power_kwh, frequency=12, start = c(2007, 1), 
+ts_month <- ts(granularity$MonthYear$Global_active_power_kwh, frequency=12, start = c(2007, 1), 
                end = c(2010, 10))
 adf.test(ts_month) # test if stationary data
 plot(ts_month)
@@ -337,7 +312,7 @@ plot(stl(ts_month, s.window = 12))
 sum(abs(x = dec_month$random), na.rm = T) # check the total absolute random
 
 # Week
-ts_week <- ts(by_week$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
+ts_week <- ts(granularity$WeekYear$Global_active_power_kwh, frequency = 52, start= c(2007, 1), 
               end = c(2010,48))
 adf.test(ts_week) # test for stationarity (mean and variance doesn't change over time)
 plot(ts_week)
@@ -355,7 +330,7 @@ inds <- seq(as.Date("2007-01-01"), as.Date("2010-11-26"), by = "day") # Create a
 
 ## Create a time series object
 set.seed(25)
-ts_day <- ts(by_day$Global_active_power_kwh, start = c(2007, as.numeric(format(inds[1], "%j"))), # inds[1] means first day / %j means the day of the year (from 001 to 365)
+ts_day <- ts(granularity$Date$Global_active_power_kwh, start = c(2007, as.numeric(format(inds[1], "%j"))), # inds[1] means first day / %j means the day of the year (from 001 to 365)
            frequency = 365)
 
 plot(ts_day)
@@ -475,12 +450,10 @@ forecast <- predict(m, future)
 
 # export tables for power bi analysis
 
-#by_month <- select(by_month, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(by_month)))
+#granularity$MonthYear <- select(granularity$MonthYear, Global_active_power_kwh) %>% mutate(ID = seq.int(nrow(granularity$MonthYear)))
 
-write.csv(by_month, file = "by_month.csv")
+write.csv(granularity$MonthYear, file = "granularity$MonthYear.csv")
           
-write.csv(by_day, file = "by_day.csv")
-
-
+write.csv(granularity$Date, file = "granularity$Date.csv")
 
 
