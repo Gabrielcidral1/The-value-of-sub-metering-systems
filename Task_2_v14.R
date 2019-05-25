@@ -1,7 +1,7 @@
 # Energy consumption task
 
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
-               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, data.table)
+               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, data.table, eply)
 
 ##### Data import #####
 
@@ -44,17 +44,7 @@ HHPC[is.na(HHPC)] <- 0
 
 ##### Exploratory analysis #####
 
-# Missing values
-missing <- HHPC[is.na(HHPC$Global_active_power),]
-
 #####Time conversion####
-
-# Column date time
-
-HHPC$DateTime <- paste0(HHPC$Date,HHPC$Time)
-HHPC <- HHPC[,c(ncol(HHPC), 1:(ncol(HHPC)-1))]
-
-HHPC$DateTime <- as.POSIXct(HHPC$DateTime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
 # Scale conversion
 HHPC$kitchen_kwh <- HHPC$Sub_metering_1/1000
@@ -80,20 +70,20 @@ for (i in c("2007-03-25 02:00:00", "2008-03-30 02:00:00", "2009-03-29 02:00:00",
 
 # New time variables
 HHPC_dst$Year <- year(HHPC_dst$DateTime)
-HHPC_dst$Day_week <- wday(HHPC_dst$DateTime,label = TRUE, abbr = FALSE,
+HHPC_dst$Day_week <- lubridate::wday(HHPC_dst$DateTime,label = TRUE, abbr = FALSE,
                           week_start = getOption("lubridate.week.start", 7),
                           locale = "English")
 
-HHPC_dst$month <- month(HHPC_dst$DateTime, label =  FALSE, abbr = FALSE, 
+HHPC_dst$month <- lubridate::month(HHPC_dst$DateTime, label =  FALSE, abbr = FALSE, 
                         locale = "English")
 
 HHPC_dst$MonthYear <- paste(HHPC_dst$month,"-",HHPC_dst$Year)
 
-#HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime))
+#HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime)) #it takes a while to run
 
-HHPC_dst$Hour <- hour(HHPC_dst$DateTime)
+HHPC_dst$Hour <- lubridate::hour(HHPC_dst$DateTime)
 
-HHPC_dst$Week <- week(HHPC_dst$DateTime)
+HHPC_dst$Week <- lubridate::week(HHPC_dst$DateTime)
 
 HHPC_dst$WeekYear <- paste(HHPC_dst$Week,"-",HHPC_dst$Year)
 
@@ -116,7 +106,6 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
 }
 
 
-
 granularity$Year <- granularity$Year[!(granularity$Year$Year == "2006"),]
 
 granularity$Year <- melt(as.data.frame(granularity$Year),  id=c("Year","Global_reactive_power",
@@ -131,20 +120,15 @@ names(granularity$Year)[names(granularity$Year) == 'value'] <- 'Active_Power_Sub
 #   theme(text = element_text(size=20)) + labs(y= "Global Active Power") + 
 #   ggtitle("Energy consumption per year")
 
-##### *by month ####
-# granularity$MonthYear <- HHPC_dst %>% group_by(MonthYear, month, Year) %>% 
-#   summarise(Global_reactive_power = sum(Global_reactive_power), 
-#             Global_active_power_kwh = sum(Global_active_power_kwh),
-#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity),
-#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-
 granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "12 - 2006"),] # excluding incomplete month
 granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "11 - 2010"),]
 
-# granularity$MonthYear <- granularity$MonthYear[order(granularity$MonthYear$Year,granularity$MonthYear$month),] # Order for graph
-# granularity$MonthYear <- transform(granularity$MonthYear, MonthYear = factor(MonthYear, levels = MonthYear))
-# 
+granularity$MonthYear$Year <- sub(x = sub("^\\S+\\s+", '', granularity$MonthYear$MonthYear), pattern = "- ",replacement = "") # Extract year
+granularity$MonthYear$month <- sub(x = sub("\\s+\\S+$", '', granularity$MonthYear$MonthYear), pattern = " -", replacement = "") #extract month
+
+granularity$MonthYear <- granularity$MonthYear[order(granularity$MonthYear$Year,granularity$MonthYear$month),] # Order the dataframe
+granularity$MonthYear <- transform(granularity$MonthYear, MonthYear = factor(MonthYear, levels = MonthYear))
+ 
 # ggplot(data = granularity$MonthYear, aes(x = MonthYear, y = Global_active_power_kwh, 
 #                             group = 1, label = round(Global_active_power_kwh,0))) + 
 #   geom_line(stat = "identity", color = "blue", size = 2)+ 
@@ -157,8 +141,7 @@ granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear
 #   theme(axis.text.x=element_text(color=c("black","transparent","transparent"))) 
 # 
 
-# 
-# granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
+granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
 
 ########## *by day ##########
 
