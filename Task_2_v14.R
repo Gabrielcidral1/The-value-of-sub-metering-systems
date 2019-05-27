@@ -229,7 +229,7 @@ granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "200
 # write.table(by_hour, "by_hour.txt", sep=";", row.names = F)
 # by_hour=read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualization/Task_1/by_hour.txt", 
 #                    ";", escape_double = FALSE, col_types = cols(Date = col_date(format = "%Y-%m-%d"), 
-#                                                                 Hour = col_time(format = "%H:%M")), locale = locale(), trim_ws = TRUE)
+#                                                                 Hour = col_time(format = "%H:%M")), trim_ws = TRUE)
 # 
 # by_hour <- cbind(by_hour,paste(by_hour$Date,by_hour$Hour), stringsAsFactors=FALSE) 
 # names(by_hour)[names(by_hour) == "paste(by_hour$Date, by_hour$Hour)"] <- 'DateTime'
@@ -413,22 +413,24 @@ autoplot(df) + ylab("kw")
 
 ##### Prophet
 
-HHPC_dst[is.na(HHPC_dst)] <- 0
-
-df_prophet <- HHPC_dst
+df_prophet <- granularity$Date
 
 names(df_prophet)
 
-df_prophet <- setnames(df_prophet, c("DateTime","Global_active_power_kwh"),c("ds","y"))
-m <- prophet(df = df_prophet) 
-
-sum(is.na(df_prophet))
+df_prophet <- setnames(df_prophet, c("Date","Global_active_power_kwh"),c("ds","y"))
+system.time(
+  m <- prophet(df = df_prophet)
+  ) 
 
 # Extend dataframe 100 days into the future
-future <- make_future_dataframe(m, periods = 100)
+system.time(
+  future <- make_future_dataframe(m, periods = 100)
+)
 
 # Generate forecast for next 100 days
-forecast <- predict(m, future)
+system.time(
+  forecast <- predict(m, future)
+  )
 
 
 # export tables for power bi analysis
