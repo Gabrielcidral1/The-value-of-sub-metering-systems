@@ -68,8 +68,11 @@ for (i in c("2007-03-25 02:00:00", "2008-03-30 02:00:00", "2009-03-29 02:00:00",
                                   "%d-%m-%Y %H:%M:%S")
 }
 
+
+HHPC_dst$Date <- as.Date(HHPC_dst$DateTime)
+
 # New time variables
-HHPC_dst$Year <- year(HHPC_dst$DateTime)
+HHPC_dst$Year <- floor_date(HHPC_dst$Date, unit = "year")
 HHPC_dst$Day_week <- lubridate::wday(HHPC_dst$DateTime,label = TRUE, abbr = FALSE,
                           week_start = getOption("lubridate.week.start", 7),
                           locale = "English")
@@ -77,7 +80,8 @@ HHPC_dst$Day_week <- lubridate::wday(HHPC_dst$DateTime,label = TRUE, abbr = FALS
 HHPC_dst$month <- lubridate::month(HHPC_dst$DateTime, label =  FALSE, abbr = FALSE, 
                         locale = "English")
 
-HHPC_dst$MonthYear <- str_trim(paste(HHPC_dst$month,"-",HHPC_dst$Year))
+HHPC_dst$MonthYear <- floor_date(HHPC_dst$Date, unit = "month")
+
 
 #HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime)) #it takes a while to run
 
@@ -85,14 +89,13 @@ HHPC_dst$Hour <- lubridate::hour(HHPC_dst$DateTime)
 
 HHPC_dst$Week <- lubridate::week(HHPC_dst$DateTime)
 
-HHPC_dst$WeekYear <- paste(HHPC_dst$Week,"-",HHPC_dst$Year)
-
-HHPC_dst$Date <- as.Date(HHPC_dst$DateTime, "%d/%m/%Y",tz = "GMT")
+HHPC_dst$WeekYear <- floor_date(HHPC_dst$Date, "week")
 
 ####### Data by year, month, week, day and hour #######
 
 granularity <- list()
 group <- as.list(c("Year","MonthYear","WeekYear","Date"))
+
 
 for(i in group) {
 
@@ -105,32 +108,22 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
             Global_intensity = mean(Global_intensity))
 }
 
-
-granularity$Year <- granularity$Year[!(granularity$Year$Year == "2006"),]
-
-granularity$Year <- melt(as.data.frame(granularity$Year),  id=c("Year","Global_reactive_power",
-                                             "Global_active_power_kwh","Voltage", 
-                                             "Global_intensity"))
-
-names(granularity$Year)[names(granularity$Year) == 'variable'] <- 'Sub_type' # Rename
-names(granularity$Year)[names(granularity$Year) == 'value'] <- 'Active_Power_Sub'# Rename
-
-
-granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "12 - 2006"),] # excluding incomplete month
-granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "11 - 2010"),]
-
-granularity$MonthYear$Year <- sub(x = sub("^\\S+\\s+", '', granularity$MonthYear$MonthYear), pattern = "- ",replacement = "") # Extract year
-granularity$MonthYear$month <- sub(x = sub("\\s+\\S+$", '', granularity$MonthYear$MonthYear), pattern = " -", replacement = "") #extract month
-
-granularity$MonthYear <- granularity$MonthYear[order(granularity$MonthYear$Year,granularity$MonthYear$month),] # Order the dataframe
-granularity$MonthYear <- transform(granularity$MonthYear, MonthYear = factor(MonthYear, levels = MonthYear))
- 
-granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
-
-########## *by day ##########
-
-
+# granularity$Year <- granularity$Year[!(granularity$Year$Year == "2006"),]
 # 
+# granularity$Year <- melt(as.data.frame(granularity$Year),  id=c("Year","Global_reactive_power",
+#                                              "Global_active_power_kwh","Voltage", 
+#                                              "Global_intensity"))
+# 
+# names(granularity$Year)[names(granularity$Year) == 'variable'] <- 'Sub_type' # Rename
+# names(granularity$Year)[names(granularity$Year) == 'value'] <- 'Active_Power_Sub'# Rename
+# 
+
+# granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "12 - 2006"),] # excluding incomplete month
+# granularity$MonthYear <- granularity$MonthYear[!(granularity$MonthYear$MonthYear == "11 - 2010"),]
+# 
+# granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
+
+ 
 # ############ *by hour ##########
 # by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
 #   summarise(Global_reactive_power = sum(Global_reactive_power), 
@@ -204,87 +197,87 @@ ts_granular <- list(ts_month, ts_week, ts_day)
 
 ###################### Models #######
 
-###### *Holt-winters ######
-
-# Month
-HW_fixed <- HoltWinters(x = ts_month)
-
-HW_fixed_pred_1 <- forecast(HW_fixed,h= 20)
-autoplot(HW_fixed_pred_1)
-
-# Week
-HW_week <- HoltWinters(x = ts_week, seasonal = "additive")
-
-HW_fixed_pred_week <- forecast(HW_week,h= 50)
-autoplot(HW_fixed_pred_week, ylim = c(0,400))
-
-######## *Arima ############
-
-# Month
-
-arima_month <- auto.arima(ts_month)
-
-arima_month_pre <- forecast(arima_month, h=20)
-
-plot(arima_month_pre)
-
-# Week
-
-arima_week <- auto.arima(ts_week)
-arima_week_pred <- forecast(arima_week, h=20)
-plot(arima_week_pred)
-
-######## naive ######
-snaive_month <- snaive(ts_month, h=20)
-plot(snaive_month)
-
-# Train and Test sets
-
-# train
-train <- window(ts_month,start=c(2007,10),end=c(2009,10)) # create a cut in ts
-
-arima_month_cv <- arima(train, order = c(0,0,0), 
-                     seasonal = list(order = c(1,1,0), period = 12)) # there was an error using auto arima, so I had to input parameters by hand
-
-arima_month_pre.cv <- forecast(arima_month_cv, h=12)
-
-HW_fixed_cv <- HoltWinters(x = train)
-
-HW_fixed_pred_1.cv <- forecast(HW_fixed_cv, h = 12)
-
-snaive_fit <- snaive(train, h = 12)
-
-autoplot(ts_month, start=c(2007,1)) +
-  autolayer(snaive_fit, series="Seasonal naïve", PI=FALSE) +
-  autolayer(arima_month_pre.cv, series="Auto arima", PI=FALSE) +
-  autolayer(HW_fixed_pred_1.cv, series="Holt Winters", PI=FALSE) +
-  xlab("Year") + ylab("kw") +
-  ggtitle("Forecasts of energy consumption") +
-  guides(colour=guide_legend(title="Forecast"))
-
-# test
-
-test <- window(ts_month, start=c(2009,11))
-accuracy(snaive_fit, test)
-accuracy(arima_month_pre.cv, test)
-accuracy(HW_fixed_pred_1.cv, test)
-
-# Combine models for test
-
-x <- cbind(HW = HW_fixed_pred_1.cv$mean,SNAIVE = snaive_fit$mean)
-
-mix_model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
-
-w <- mix_model$weights
-
-summary(mix_model)
-plot(mix_model)
-
-z <- ts(predict(mix_model, x, test, type='response'), start=c(2009,11), freq=12)
-df <- cbind(ts_month, z)
-colnames(df) <- c("Data","Combined model")
-autoplot(df) + ylab("kw")
-
+# ###### *Holt-winters ######
+# 
+# # Month
+# HW_fixed <- HoltWinters(x = ts_month)
+# 
+# HW_fixed_pred_1 <- forecast(HW_fixed,h= 20)
+# autoplot(HW_fixed_pred_1)
+# 
+# # Week
+# HW_week <- HoltWinters(x = ts_week, seasonal = "additive")
+# 
+# HW_fixed_pred_week <- forecast(HW_week,h= 50)
+# autoplot(HW_fixed_pred_week, ylim = c(0,400))
+# 
+# ######## *Arima ############
+# 
+# # Month
+# 
+# arima_month <- auto.arima(ts_month)
+# 
+# arima_month_pre <- forecast(arima_month, h=20)
+# 
+# plot(arima_month_pre)
+# 
+# # Week
+# 
+# arima_week <- auto.arima(ts_week)
+# arima_week_pred <- forecast(arima_week, h=20)
+# plot(arima_week_pred)
+# 
+# ######## naive ######
+# snaive_month <- snaive(ts_month, h=20)
+# plot(snaive_month)
+# 
+# # Train and Test sets
+# 
+# # train
+# train <- window(ts_month,start=c(2007,10),end=c(2009,10)) # create a cut in ts
+# 
+# arima_month_cv <- arima(train, order = c(0,0,0), 
+#                      seasonal = list(order = c(1,1,0), period = 12)) # there was an error using auto arima, so I had to input parameters by hand
+# 
+# arima_month_pre.cv <- forecast(arima_month_cv, h=12)
+# 
+# HW_fixed_cv <- HoltWinters(x = train)
+# 
+# HW_fixed_pred_1.cv <- forecast(HW_fixed_cv, h = 12)
+# 
+# snaive_fit <- snaive(train, h = 12)
+# 
+# autoplot(ts_month, start=c(2007,1)) +
+#   autolayer(snaive_fit, series="Seasonal naïve", PI=FALSE) +
+#   autolayer(arima_month_pre.cv, series="Auto arima", PI=FALSE) +
+#   autolayer(HW_fixed_pred_1.cv, series="Holt Winters", PI=FALSE) +
+#   xlab("Year") + ylab("kw") +
+#   ggtitle("Forecasts of energy consumption") +
+#   guides(colour=guide_legend(title="Forecast"))
+# 
+# # test
+# 
+# test <- window(ts_month, start=c(2009,11))
+# accuracy(snaive_fit, test)
+# accuracy(arima_month_pre.cv, test)
+# accuracy(HW_fixed_pred_1.cv, test)
+# 
+# # Combine models for test
+# 
+# x <- cbind(HW = HW_fixed_pred_1.cv$mean,SNAIVE = snaive_fit$mean)
+# 
+# mix_model <- mixture(Y = test, experts = x, model = 'BOA', loss.type = 'square')
+# 
+# w <- mix_model$weights
+# 
+# summary(mix_model)
+# plot(mix_model)
+# 
+# z <- ts(predict(mix_model, x, test, type='response'), start=c(2009,11), freq=12)
+# df <- cbind(ts_month, z)
+# colnames(df) <- c("Data","Combined model")
+# autoplot(df) + ylab("kw")
+# 
 
 ##### Prophet
 
@@ -295,28 +288,17 @@ df_prophet$MonthYear <- setnames(df_prophet$MonthYear, c("MonthYear","Global_act
 df_prophet$Year <- setnames(df_prophet$Year, c("Year","Global_active_power_kwh"),c("ds","y"))
 df_prophet$WeekYear <- setnames(df_prophet$WeekYear, c("WeekYear","Global_active_power_kwh"),c("ds","y"))
 
-
-df_prophet$Year$ds <- base::as.Date(sub(x = paste(df_prophet$Year$ds, "-01-01"), pattern = " ", replacement = ""))
-paste(df_prophet$MonthYear$ds
-
-
-system.time(
-  m <- prophet(df = df_prophet)
-  ) 
-
-x <- df_prophet[c(1,4)]
-
-lapply(df_prophet[c(1,4)], FUN = prophet)
+m <- lapply(df_prophet, FUN = prophet)
 
 # Extend dataframe 100 days into the future
-system.time(
-  future <- make_future_dataframe(m, periods = 100)
-)
+
+future <- lapply(m, function(x) make_future_dataframe(m = x, periods = 100))
 
 # Generate forecast for next 100 days
 system.time(
-  forecast <- predict(m, future)
+  forecast <- predict(m$Date, future$Date)
   )
+
 
 
 # export tables for power bi analysis
