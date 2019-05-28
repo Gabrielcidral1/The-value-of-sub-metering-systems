@@ -1,7 +1,8 @@
 # Energy consumption task
 
 pacman::p_load(plyr,dplyr,tidyr,readr,lubridate,ggplot2,reshape,forecast, zoo, 
-               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, data.table, eply,  timeDate, stringr)
+               tseries, opera, forecastHybrid, formatR, padr, RMySQL, prophet, 
+               data.table, eply,  timeDate, stringr, tidyverse)
 
 ##### Data import #####
 
@@ -73,29 +74,15 @@ HHPC_dst$Date <- as.Date(HHPC_dst$DateTime)
 
 # New time variables
 HHPC_dst$Year <- floor_date(HHPC_dst$Date, unit = "year")
-HHPC_dst$Day_week <- lubridate::wday(HHPC_dst$DateTime,label = TRUE, abbr = FALSE,
-                          week_start = getOption("lubridate.week.start", 7),
-                          locale = "English")
-
-HHPC_dst$month <- lubridate::month(HHPC_dst$DateTime, label =  FALSE, abbr = FALSE, 
-                        locale = "English")
 
 HHPC_dst$MonthYear <- floor_date(HHPC_dst$Date, unit = "month")
-
-
-#HHPC_dst$Summertime <- dst(as.character(HHPC_dst$DateTime)) #it takes a while to run
-
-HHPC_dst$Hour <- lubridate::hour(HHPC_dst$DateTime)
-
-HHPC_dst$Week <- lubridate::week(HHPC_dst$DateTime)
 
 HHPC_dst$WeekYear <- floor_date(HHPC_dst$Date, "week")
 
 ####### Data by year, month, week, day and hour #######
 
 granularity <- list()
-group <- as.list(c("Year","MonthYear","WeekYear","Date"))
-
+group <- as.list(c("Year","MonthYear","WeekYear","Date", "DateTime"))
 
 for(i in group) {
 
@@ -107,6 +94,14 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
             Other_kwh = sum(Other_kwh), Voltage = mean(Voltage),
             Global_intensity = mean(Global_intensity))
 }
+
+
+granularity$month$month <- lubridate::month(granularity$Date$Date, label =  FALSE, abbr = FALSE, 
+                                   locale = "English")
+
+
+granularity$Date$Date <- lubridate::week(granularity$Date$Date)
+
 
 # granularity$Year <- granularity$Year[!(granularity$Year$Year == "2006"),]
 # 
@@ -124,26 +119,6 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
 # granularity$WeekYear <- granularity$WeekYear[!(granularity$WeekYear$Year == "2006"),]
 
  
-# ############ *by hour ##########
-# by_hour <- HHPC_dst %>% group_by(Date, Hour, Day_week, month, Year, Summertime) %>% 
-#   summarise(Global_reactive_power = sum(Global_reactive_power), 
-#             Global_active_power_kwh = sum(Global_active_power_kwh),
-#             Voltage = mean(Voltage),Global_intensity = mean(Global_intensity), 
-#             kitchen_kwh = sum(kitchen_kwh), laundry_kwh = sum(laundry_kwh), 
-#             waterheat_aircond_kwh = sum(waterheat_aircond_kwh), Other_kwh = sum(Other_kwh))
-# 
-# 
-# by_hour$Hour <- by_hour$Hour*100
-# by_hour$Hour <- substr(as.POSIXct(sprintf("%04.0f", by_hour$Hour), format='%H%M'), 12, 16)
-# write.table(by_hour, "by_hour.txt", sep=";", row.names = F)
-# by_hour=read_delim("C:/Users/gabri/Desktop/Ubiqum/R/Deep_Analytics_and_Visualization/Task_1/by_hour.txt", 
-#                    ";", escape_double = FALSE, col_types = cols(Date = col_date(format = "%Y-%m-%d"), 
-#                                                                 Hour = col_time(format = "%H:%M")), trim_ws = TRUE)
-# 
-# by_hour <- cbind(by_hour,paste(by_hour$Date,by_hour$Hour), stringsAsFactors=FALSE) 
-# names(by_hour)[names(by_hour) == "paste(by_hour$Date, by_hour$Hour)"] <- 'DateTime'
-# 
-# 
 ###################################### Forecast #############################################################
 
 #################### Time Series
@@ -295,11 +270,12 @@ m <- lapply(df_prophet, FUN = prophet)
 future <- lapply(m, function(x) make_future_dataframe(m = x, periods = 100))
 
 # Generate forecast for next 100 days
-system.time(
-  forecast <- predict(m$Date, future$Date)
-  )
 
+forecast <- map2(m, future, predict) # lapply doesn't work in these cases
 
+lapply(forecast, function(x) dyplot.prophet(x =m, fcst = x))
+
+dyplot.prophet(x = m$Date, fcst = forecast$Date)
 
 # export tables for power bi analysis
 
