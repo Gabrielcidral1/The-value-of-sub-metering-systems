@@ -90,7 +90,7 @@ granularity[[i]] <- HHPC_dst %>% group_by_at(i) %>%
 }
 
 
-granularity$MonthYear$MonthYear <- lubridate::month(granularity$MonthYear$MonthYear, label =  FALSE, abbr = FALSE, 
+granularity$MonthYear$Month <- lubridate::month(granularity$MonthYear$MonthYear, label =  FALSE, abbr = FALSE, 
                                    locale = "English")
 
 granularity$Date$week <- lubridate::week(granularity$Date$Date)
@@ -115,10 +115,6 @@ df_prophet$MonthYear <- setnames(df_prophet$MonthYear, c("MonthYear","Global_act
 df_prophet$Year <- setnames(df_prophet$Year, c("Year","Global_active_power_kwh"),c("ds","y"))
 df_prophet$WeekYear <- setnames(df_prophet$WeekYear, c("WeekYear","Global_active_power_kwh"),c("ds","y"))
 
-m <- lapply(df_prophet, function(x) prophet(yearly.seasonality = T, 
-                                      weekly.seasonality = T, 
-                                      daily.seasonality = T))
-
 m <- lapply(df_prophet, FUN =  prophet)
 
 # Extend dataframe 100 days into the future
@@ -129,7 +125,6 @@ future <- lapply(m, function(x) make_future_dataframe(m = x, periods = 100))
 
 forecast <- map2(m, future, predict) # lapply doesn't work in these cases
 
-lapply(forecast, function(y) dyplot.prophet(x=m, fcst = y))
 
 plots <- list() 
 for(i in group) {
@@ -140,7 +135,7 @@ plots[[i]] <- dyplot.prophet(x = m[which(i == group)], fcst = forecast[which(i =
 
 plots[[3]]
 
-dyplot.prophet(x = m$Date, fcst = forecast)
+dyplot.prophet(x = m$Date, fcst = forecast$Date)
   
 # export tables for power bi analysis
 
