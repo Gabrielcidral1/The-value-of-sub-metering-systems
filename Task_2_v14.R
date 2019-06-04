@@ -115,27 +115,27 @@ df_prophet$MonthYear <- setnames(df_prophet$MonthYear, c("MonthYear","Global_act
 df_prophet$Year <- setnames(df_prophet$Year, c("Year","Global_active_power_kwh"),c("ds","y"))
 df_prophet$WeekYear <- setnames(df_prophet$WeekYear, c("WeekYear","Global_active_power_kwh"),c("ds","y"))
 
-m <- lapply(df_prophet, FUN =  prophet)
+df_prophet$Date$type <- "day"
+df_prophet$WeekYear$type <- "week"
+df_prophet$MonthYear$type <- "month"
+df_prophet$Year$type <- "year" 
+
+#m <- lapply(df_prophet, FUN =  prophet)
+
+m <- lapply(df_prophet, function(x) prophet(df = x, daily.seasonality = T, 
+                                            yearly.seasonality = T, 
+                                            weekly.seasonality = T))
 
 # Extend dataframe 100 days into the future
 
-future <- lapply(m, function(x) make_future_dataframe(m = x, periods = 100))
+future <- lapply(m,function(x) make_future_dataframe(m = x,periods = 24, freq = paste(x$history[1,"type"]))) 
+
 
 # Generate forecast for next 100 days
 
 forecast <- map2(m, future, predict) # lapply doesn't work in these cases
 
-
-plots <- list() 
-for(i in group) {
-  
-plots[[i]] <- dyplot.prophet(x = m[which(i == group)], fcst = forecast[which(i == group)])
-
-}  
-
-plots[[3]]
-
-dyplot.prophet(x = m$Date, fcst = forecast$Date)
+dyplot.prophet(x = m$MonthYear, fcst = forecast$MonthYear)
   
 # export tables for power bi analysis
 
